@@ -1,0 +1,67 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Execution role for the Infrastructure Health Check Agent deployed on
+  Amazon Bedrock AgentCore Runtime.
+
+# ============================================================================
+# PEDAGOGICAL DEFECTS — INTENTIONAL
+# This template contains deliberate security and configuration issues used as
+# teaching material in the "The Dev Side of the AWS DevOps Agent" workshop.
+# Participants discover these via release readiness review (Labs 1-2).
+# Do NOT fix them on the main branch — they are the point of the exercise.
+# Defects: #1 over-broad Resource, #2 missing trust condition, #4 role name overflow
+# ============================================================================
+
+Parameters:
+  StackPrefix:
+    Type: String
+    Default: "infra-health-agent"
+    Description: Prefix used for naming resources
+
+Resources:
+  AgentExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      # DEFECT #4: Role name is constructed from StackPrefix + suffix.
+      # If StackPrefix is long, this exceeds the 64-character IAM role name limit.
+      RoleName: !Sub "${StackPrefix}-InfrastructureHealthCheckAgentExecutionRole-${AWS::Region}"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: bedrock-agentcore.amazonaws.com
+            Action: sts:AssumeRole
+            # DEFECT #2: Missing Condition block with aws:SourceArn or aws:SourceAccount.
+            # This allows any AgentCore workload to assume this role (confused deputy).
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/CloudWatchReadOnlyAccess
+      Policies:
+        - PolicyName: HealthCheckAgentPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              # DEFECT #1: Over-broad permissions. cloudtrail:LookupEvents supports
+              # resource-level permissions but we use "*" for all actions.
+              - Effect: Allow
+                Action:
+                  - ec2:DescribeInstances
+                  - ec2:DescribeInstanceStatus
+                  - cloudtrail:LookupEvents
+                  - iam:ListUsers
+                  - iam:ListMFADevices
+                  - iam:ListAccessKeys
+                  - iam:GetCredentialReport
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                  - bedrock:InvokeModelWithResponseStream
+                Resource: "*"
+
+Outputs:
+  ExecutionRoleArn:
+    Description: ARN of the agent execution role
+    Value: !GetAtt AgentExecutionRole.Arn
+    Export:
+      Name: !Sub "${StackPrefix}-ExecutionRoleArn"
