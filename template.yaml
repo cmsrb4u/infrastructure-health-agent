@@ -1,0 +1,67 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Execution role for the Infrastructure Health Check Agent deployed on
+  Amazon Bedrock AgentCore Runtime.
+
+Parameters:
+  StackPrefix:
+    Type: String
+    Default: "infra-health-agent"
+    Description: Prefix used for naming resources
+
+Resources:
+  AgentExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      # Omit RoleName — let CloudFormation auto-generate a compliant unique name.
+      # This avoids the 64-character IAM role name limit.
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: bedrock-agentcore.amazonaws.com
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+              ArnLike:
+                aws:SourceArn: !Sub "arn:aws:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:runtime/*"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/CloudWatchReadOnlyAccess
+      Policies:
+        - PolicyName: HealthCheckAgentPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              # ec2:Describe* and iam:List* do not support resource-level permissions
+              # (accepted exceptions per AGENTS.md)
+              - Effect: Allow
+                Action:
+                  - ec2:DescribeInstances
+                  - ec2:DescribeInstanceStatus
+                  - iam:ListUsers
+                  - iam:ListMFADevices
+                  - iam:ListAccessKeys
+                  - iam:GetCredentialReport
+                Resource: "*"
+              # CloudTrail LookupEvents scoped to this account's trail
+              - Effect: Allow
+                Action:
+                  - cloudtrail:LookupEvents
+                Resource: !Sub "arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/*"
+              # Bedrock model invocation scoped to the specific model used
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                  - bedrock:InvokeModelWithResponseStream
+                Resource:
+                  - !Sub "arn:aws:bedrock:${AWS::Region}::foundation-model/anthropic.claude-sonnet-4-5-20250929-v1:0"
+                  - !Sub "arn:aws:bedrock:${AWS::Region}::foundation-model/global.anthropic.claude-sonnet-4-5-20250929-v1:0"
+
+Outputs:
+  ExecutionRoleArn:
+    Description: ARN of the agent execution role
+    Value: !GetAtt AgentExecutionRole.Arn
+    Export:
+      Name: !Sub "${StackPrefix}-ExecutionRoleArn"
