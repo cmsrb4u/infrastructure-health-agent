@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+.venv/
+.env
+*.log
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+agentcore/cdk/
+agentcore/.cli/
+agentcore/cdk.out/
